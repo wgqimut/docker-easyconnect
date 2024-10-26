@@ -1,7 +1,8 @@
 #!/bin/bash
 eval "$(detect-iptables.sh)"
 eval "$(detect-route.sh)"
-eval "$(vpn-config.sh)"
+
+. vpn-config.sh
 
 forward_ports() {
 	if [ -n "$FORWARD" ]; then
@@ -106,75 +107,7 @@ force_open_ports() {
 }
 
 init_vpn_config() {
-	if [ "EC_CLI" = "$_VPN_TYPE" ]; then
-		ln -fs /usr/share/sangfor/EasyConnect/resources/{conf_${EC_VER},conf}
-	fi
-
-	if [ "EC_GUI" = "$_VPN_TYPE" ]; then
-		# 登录信息持久化处理
-		## 持久化配置文件夹 感谢 @hexid26 https://github.com/Hagb/docker-easyconnect/issues/21
-		cp -r /usr/share/sangfor/EasyConnect/resources/conf_backup/. ~/conf/
-		rm -f ~/conf/ECDomainFile
-		[ -e ~/easy_connect.json ] && mv ~/easy_connect.json ~/conf/easy_connect.json # 向下兼容
-		mkdir -p /usr/share/sangfor/EasyConnect/resources/conf/
-		cd ~/conf/
-
-		## 不再假定 /root 的文件系统（可能从宿主机挂载）支持 unix sock（用于 ECDomainFile），因此不直接使用
-		for file in *; do
-			## 通过软链接减小拷贝量
-			ln -s ~/conf/"$file" /usr/share/sangfor/EasyConnect/resources/conf/"$file"
-		done
-		cd -
-		[ -n "$DISABLE_PKG_VERSION_XML" ] && ln -fs /dev/null /usr/share/sangfor/EasyConnect/resources/conf/pkg_version.xml
-
-		sync_ec2volume() {
-			cd /usr/share/sangfor/EasyConnect/resources/conf/
-			[ -n "$DISABLE_PKG_VERSION_XML" ] && rm pkg_version.xml
-			for file in *; do
-				[ -r "$file" -a ! -L "$file" -a "ECDomainFile" != "$file" ] && cp -r "$file" ~/conf/
-			done
-			cd ~/conf/
-			for file in *; do
-				[ ! -e /usr/share/sangfor/EasyConnect/resources/conf/"$file" ] && {
-					rm -r "$file"
-				}
-			done
-		}
-		## 容器退出时将配置文件同步回 /root/conf。感谢 @Einskai 的点子
-		trap "sync_ec2volume; exit;" SIGINT SIGQUIT SIGSTOP SIGTSTP SIGTERM
-	else
-		trap "exit;" SIGINT SIGQUIT SIGSTOP SIGTSTP SIGTERM
-	fi
-}
-
-start_tigervncserver() {
-	# $PASSWORD 不为空时，更新 vnc 密码
-	[ -e ~/.vnc/passwd ] || (mkdir -p ~/.vnc && (echo password | tigervncpasswd -f > ~/.vnc/passwd)) 
-	[ -n "$PASSWORD" ] && printf %s "$PASSWORD" | tigervncpasswd -f > ~/.vnc/passwd
-
-	VNC_SIZE="${VNC_SIZE:-1110x620}"
-
-	open_port 5901
-	tigervncserver "$DISPLAY" -geometry "$VNC_SIZE" -localhost no -passwd ~/.vnc/passwd -xstartup flwm
-	stalonetray -f 0 2> /dev/null &
-
-	if [ -n "$ECPASSWORD" ]; then
-		echo "ECPASSWORD has been deprecated, because of the confusion of its name." >&2
-		echo "Use CLIP_TEXT instead." >&2
-	fi
-
-	[ -z "$CLIP_TEXT" ] && CLIP_TEXT="$ECPASSWORD"
-
-	# 将 easyconnect 的密码放入粘贴板中，应对密码复杂且无法保存的情况 (eg: 需要短信验证登录)
-	# 感谢 @yakumioto https://github.com/Hagb/docker-easyconnect/pull/8
-	echo "$CLIP_TEXT" | DISPLAY=:1 xclip -selection c
-
-	# 环境变量USE_NOVNC不为空时，启动 easy-novnc
-	if [ -n "$USE_NOVNC" ]; then
-		open_port 8080
-		novnc
-	fi
-
+	ln -fs /usr/share/sangfor/EasyConnect/resources/{conf_${EC_VER},conf}
 }
 
 keep_pinging() {
@@ -204,11 +137,6 @@ config_vpn_iptables &
 force_open_ports &
 keep_pinging &
 keep_pinging_url &
-if [ -z "$DISPLAY" ]
-then
-	export DISPLAY=:1
-	start_tigervncserver &
-fi
 
 init_vpn_config
 wait
@@ -216,7 +144,3 @@ wait
 [ -n "$EXIT" ] && export MAX_RETRY=0
 start-sangfor.sh &
 wait $!
-
-if [ "EC_GUI" = "$_VPN_TYPE" ]; then
-	sync_ec2volume
-fi

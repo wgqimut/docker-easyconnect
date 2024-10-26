@@ -1,5 +1,6 @@
 #!/bin/bash
-eval "$(vpn-config.sh)"
+. vpn-config.sh
+
 fake-hwaddr-run() { "$@" ; }
 if [ -n "$FAKE_HWADDR" ]; then
 	fake-hwaddr-run() { LD_PRELOAD=/usr/local/lib/fake-hwaddr.so "$@" ; }
