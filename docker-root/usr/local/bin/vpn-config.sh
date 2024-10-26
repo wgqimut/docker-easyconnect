@@ -47,6 +47,16 @@ vpn_ui() {
 		done
 	fi
 
+    if [[ ${output} == *"auto login is disabled"* ]]; then
+        output=$(${VPN_UI} login ${CLI_OPTS})
+        if [[ ${output} == *"login successfull"* ]]; then
+            echo "login success: ${output}"
+            while true; do
+                sleep 60
+            done
+        fi
+    fi
+
 	echo "login error: ${output}"
 	return 1
 }
