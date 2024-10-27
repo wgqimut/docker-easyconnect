@@ -47,7 +47,8 @@ vpn_ui() {
 		done
 	fi
 
-    if [[ ${output} == *"auto login is disabled"* ]]; then
+    if [[ ${output} == *"auto login is disabled"* ]] || [[ ${output} == *"auto login failed"* ]]; then
+        echo "login with non-auto mode..."
         output=$(${VPN_UI} login ${CLI_OPTS})
         if [[ ${output} == *"login successfull"* ]]; then
             echo "login success: ${output}"
